@@ -8,141 +8,92 @@ import { getSingleResponseWithTimeout, LlmError } from '../services/llmService'
 import { fetchRuntimeCapabilities, getCachedRuntimeCapabilities } from '../services/runtimeCapabilities'
 import { isMusicMuted, setMusicMuted, startMusic, tryResumeMusic, playSfx } from '../services/audioService'
 import { speakAndWait, stopAllAudio, primeTTSPlayback } from '../services/ttsService'
-import { CODENAMES_WORDS } from '../data/wordList'
+import {
+  ANTES, TOTAL_HANDS, STARTING_CHIPS,
+  createDeck, shuffleDeck, dealFrom,
+  valueDisplay, suitSymbol, cardStr, cardsStr, cardSpoken, isRed,
+  evaluateHand, compareRanks, describeHand, handCategory,
+  opponentDecision,
+} from '../data/poker'
 import './GameShell.css'
-import './Codenames.css'
+import './BigBlind.css'
 
-const GRID_SIZE = 16
-const BLUE_COUNT = 6
-const RED_COUNT = 4
-const BLACK_COUNT = 1
-const NEUTRAL_COUNT = GRID_SIZE - BLUE_COUNT - RED_COUNT - BLACK_COUNT
-const MAX_LLM_RETRIES = 2
+const ALL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
-function shuffle(arr) {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
+function Card({ card, hidden }) {
+  if (hidden) return <div className="bb-card bb-card-hidden">?</div>
+  return (
+    <div className={`bb-card ${isRed(card) ? 'bb-card-red' : 'bb-card-black'}`}>
+      {valueDisplay(card.value)}{suitSymbol(card.suit)}
+    </div>
+  )
 }
 
-function generateBoard() {
-  const words = shuffle(CODENAMES_WORDS).slice(0, GRID_SIZE)
-  const colors = shuffle([
-    ...Array(BLUE_COUNT).fill('blue'),
-    ...Array(RED_COUNT).fill('red'),
-    ...Array(BLACK_COUNT).fill('black'),
-    ...Array(NEUTRAL_COUNT).fill('neutral'),
-  ])
-  return words.map((word, i) => ({
-    word: word.toUpperCase(),
-    color: colors[i],
-    revealed: false,
-  }))
-}
-
-function countUnrevealed(board, color) {
-  return board.filter(c => c.color === color && !c.revealed).length
-}
-
-function calcScore(board) {
-  const blue = board.filter(c => c.color === 'blue' && c.revealed).length
-  const red = board.filter(c => c.color === 'red' && c.revealed).length
-  return blue - red
-}
-
-function checkGameOver(board) {
-  if (countUnrevealed(board, 'blue') === 0) return 'all-blue'
-  if (countUnrevealed(board, 'red') === 0) return 'all-red'
-  if (board.some(c => c.color === 'black' && c.revealed)) return 'assassin'
-  return null
-}
-
-function buildGuessPrompt(board, clue, history, guessesRemaining, guessesMade) {
-  const unrevealed = board.filter(c => !c.revealed).map(c => c.word)
-  const revealed = board.filter(c => c.revealed)
-
-  let p = 'You are playing a word-association board game as the guesser. '
-  p += 'Your partner (the spymaster) sees which words are safe and which are dangerous. '
-  p += 'They give you a one-word clue and a number telling you how many board words relate to that clue.\n\n'
-
-  p += 'UNREVEALED WORDS ON THE BOARD:\n' + unrevealed.join(', ') + '\n\n'
-
-  if (revealed.length > 0) {
-    p += 'ALREADY REVEALED:\n'
-    for (const c of revealed) {
-      const label = c.color === 'blue' ? 'BLUE (safe)'
-        : c.color === 'red' ? 'RED (danger)'
-        : c.color === 'black' ? 'BLACK (assassin)'
-        : 'NEUTRAL'
-      p += `- ${c.word}: ${label}\n`
-    }
-    p += '\n'
-  }
+function buildAgentPrompt(hole, community, pot, agentChips, oppAChips, oppBChips, ante, handNum, history, message) {
+  let p = `You are a poker player in a fast 5-hand tournament. This is hand ${handNum} of ${TOTAL_HANDS}.\n\n`
+  p += `Your hole cards: ${cardsStr(hole)}\n`
+  p += `Community cards: ${cardsStr(community)}\n\n`
+  p += `Pot: ${pot} chips (everyone anted ${ante})\n`
+  p += `Your chips: ${agentChips} | Opponent A: ${oppAChips} | Opponent B: ${oppBChips}\n\n`
+  p += `You can: FOLD (forfeit your ante), CHECK (play for the current pot), or BET [amount] (risk more to win more).\n`
+  p += `If you BET, opponents may call or fold. Bigger bets scare weaker hands away.\n\n`
 
   if (history.length > 0) {
-    p += 'PREVIOUS TURNS:\n'
-    for (const t of history) {
-      p += `  Clue: "${t.clue.word} ${t.clue.number}"\n`
-      for (const g of t.guesses) {
-        const sym = g.color === 'blue' ? '+' : g.color === 'red' ? 'X' : g.color === 'black' ? '!' : '-'
-        p += `    [${sym}] ${g.word}\n`
-      }
-      if (t.passed) p += '    (stopped guessing)\n'
+    p += 'Previous hands:\n'
+    for (const h of history) {
+      p += `  Hand ${h.num}: You had ${h.agentCards}. Board: ${h.community}. `
+      p += `You ${h.agentAction}. ${h.result}\n`
+      if (h.coachMsg) p += `    Coach said: "${h.coachMsg}"\n`
     }
     p += '\n'
   }
 
-  p += `CURRENT CLUE: "${clue.word}" ${clue.number}\n`
-  p += `This means ${clue.number} unrevealed word(s) relate to "${clue.word}".\n`
-  p += `You have exactly ${guessesRemaining} guess(es) remaining this turn.\n\n`
-
-  if (guessesMade > 0) {
-    p += 'You may say PASS to stop guessing if you are unsure.\n\n'
+  if (message) {
+    p += `Your coach sent this message: "${message}"\n`
+    p += '(Your coach can see information you cannot. Consider their advice carefully.)\n\n'
   } else {
-    p += 'You must make at least one guess.\n\n'
+    p += 'Your coach did not send a message this hand. Use your own judgment.\n\n'
   }
 
-  p += 'Pick ONE word from the unrevealed list. Respond in EXACTLY this format:\n'
-  p += 'GUESS: [word from the board, or PASS]\n'
-  p += 'REASON: [one brief sentence]\n'
+  p += 'Respond EXACTLY in this format:\n'
+  p += 'ACTION: FOLD | CHECK | BET [amount]\n'
+  p += 'THINKING: [one brief sentence]\n'
 
   return p
 }
 
-function parseGuessResponse(response, unrevealedWords) {
-  if (!response) return { word: null, thinking: 'No response.' }
+function parseAgentAction(response, maxChips) {
+  if (!response) return { action: 'check', amount: 0, thinking: 'No response.' }
 
-  const guessMatch = response.match(/GUESS\s*:\s*(.+)/i)
-  const reasonMatch = response.match(/REASON\s*:\s*(.+)/i)
+  const actionMatch = response.match(/ACTION\s*:\s*(FOLD|CHECK|BET\s*(\d+))/i)
+  const thinkingMatch = response.match(/THINKING\s*:\s*(.+)/i)
+  const thinking = thinkingMatch ? thinkingMatch[1].trim() : ''
 
-  let rawWord = guessMatch ? guessMatch[1].trim().replace(/^["']+|["']+$/g, '') : null
-  const thinking = reasonMatch ? reasonMatch[1].trim() : ''
+  if (!actionMatch) return { action: 'check', amount: 0, thinking: thinking || response.slice(0, 120) }
 
-  if (rawWord && /^pass$/i.test(rawWord)) {
-    return { word: 'PASS', thinking: thinking || 'Not confident enough to continue.' }
+  const raw = actionMatch[1].toUpperCase()
+  if (raw === 'FOLD') return { action: 'fold', amount: 0, thinking }
+  if (raw === 'CHECK') return { action: 'check', amount: 0, thinking }
+
+  const bet = Math.min(parseInt(actionMatch[2]) || 0, maxChips)
+  if (bet <= 0) return { action: 'check', amount: 0, thinking }
+  return { action: 'bet', amount: bet, thinking }
+}
+
+function consumeLetters(message, pool) {
+  const next = new Set(pool)
+  for (const ch of message.toUpperCase()) {
+    if (/[A-Z]/.test(ch)) next.delete(ch)
   }
+  return next
+}
 
-  if (rawWord) {
-    const exact = unrevealedWords.find(w => w === rawWord.toUpperCase())
-    if (exact) return { word: exact, thinking }
-
-    const firstToken = rawWord.split(/[\s,;.!?]/)[0].trim().toUpperCase()
-    const tokenMatch = unrevealedWords.find(w => w === firstToken)
-    if (tokenMatch) return { word: tokenMatch, thinking }
+function pendingLetters(message, pool) {
+  const used = new Set()
+  for (const ch of message.toUpperCase()) {
+    if (/[A-Z]/.test(ch) && pool.has(ch)) used.add(ch)
   }
-
-  const sorted = [...unrevealedWords].sort((a, b) => b.length - a.length)
-  for (const w of sorted) {
-    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    if (new RegExp(`\\b${escaped}\\b`, 'i').test(response)) {
-      return { word: w, thinking: thinking || response.substring(0, 120) }
-    }
-  }
-
-  return { word: null, thinking: response.substring(0, 200) }
+  return used
 }
 
 export default function GameShell() {
@@ -153,28 +104,30 @@ export default function GameShell() {
   const [error, setError] = useState('')
   const [musicMuted, setMusicMutedState] = useState(() => isMusicMuted())
 
-  const [board, setBoard] = useState([])
-  const [turnNumber, setTurnNumber] = useState(1)
-  const [turnHistory, setTurnHistory] = useState([])
+  const [handNum, setHandNum] = useState(1)
+  const [agentChips, setAgentChips] = useState(STARTING_CHIPS)
+  const [oppAChips, setOppAChips] = useState(STARTING_CHIPS)
+  const [oppBChips, setOppBChips] = useState(STARTING_CHIPS)
+  const [letterPool, setLetterPool] = useState(() => new Set(ALL_LETTERS))
+  const [handHistory, setHandHistory] = useState([])
 
-  const [phase, setPhase] = useState('clue')
-  const [clueInput, setClueInput] = useState('')
-  const [numberInput, setNumberInput] = useState(2)
-  const [currentClue, setCurrentClue] = useState(null)
-  const [currentTurnGuesses, setCurrentTurnGuesses] = useState([])
-  const [llmResponse, setLlmResponse] = useState(null)
-  const [revealingIndex, setRevealingIndex] = useState(-1)
+  const [agentCards, setAgentCards] = useState([])
+  const [oppACards, setOppACards] = useState([])
+  const [oppBCards, setOppBCards] = useState([])
+  const [community, setCommunity] = useState([])
+  const [pot, setPot] = useState(0)
+  const [currentAnte, setCurrentAnte] = useState(0)
 
-  const [showKey, setShowKey] = useState(true)
+  const [phase, setPhase] = useState('input')
+  const [messageInput, setMessageInput] = useState('')
+  const [llmAction, setLlmAction] = useState(null)
+  const [handResult, setHandResult] = useState(null)
   const [showHelp, setShowHelp] = useState(false)
-  const [gameOverReason, setGameOverReason] = useState(null)
-  const [clueError, setClueError] = useState('')
 
-  const turnHistoryRef = useRef(turnHistory)
+  const handHistoryRef = useRef(handHistory)
+  handHistoryRef.current = handHistory
   const abortRef = useRef(false)
-  turnHistoryRef.current = turnHistory
-
-  const clueInputRef = useRef(null)
+  const inputRef = useRef(null)
 
   // ── INIT ──
 
@@ -229,12 +182,48 @@ export default function GameShell() {
     try {
       await saveState(playerId, newState)
       setGameState(newState)
-    } catch (err) {
-      console.error(err)
-    }
+    } catch (err) { console.error(err) }
   }
 
-  // ── GAME START ──
+  // ── DEAL A HAND ──
+
+  const dealHand = useCallback((num, aChips, oAChips, oBChips, pool, history) => {
+    const ante = ANTES[num - 1]
+    const deck = shuffleDeck(createDeck())
+
+    const d1 = dealFrom(deck, 2)
+    const d2 = dealFrom(d1.remaining, 2)
+    const d3 = dealFrom(d2.remaining, 2)
+    const d4 = dealFrom(d3.remaining, 5)
+
+    const aAnte = Math.min(ante, aChips)
+    const oAAnte = Math.min(ante, oAChips)
+    const oBAnte = Math.min(ante, oBChips)
+
+    setAgentCards(d1.dealt)
+    setOppACards(d2.dealt)
+    setOppBCards(d3.dealt)
+    setCommunity(d4.dealt)
+    setPot(aAnte + oAAnte + oBAnte)
+    setCurrentAnte(ante)
+    setAgentChips(aChips - aAnte)
+    setOppAChips(oAChips - oAAnte)
+    setOppBChips(oBChips - oBAnte)
+    setHandNum(num)
+    setLetterPool(pool)
+    setHandHistory(history)
+    handHistoryRef.current = history
+    setPhase('input')
+    setMessageInput('')
+    setLlmAction(null)
+    setHandResult(null)
+    setError('')
+    abortRef.current = false
+
+    setTimeout(() => inputRef.current?.focus(), 100)
+  }, [])
+
+  // ── START GAME ──
 
   const startGame = useCallback(() => {
     setError('')
@@ -242,194 +231,216 @@ export default function GameShell() {
 
     const caps = getCachedRuntimeCapabilities()
     if (!caps.llmAny) {
-      setError('No LLM API key configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY in your environment variables.')
+      setError('No LLM API key configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.')
       return
     }
 
-    const newBoard = generateBoard()
-    setBoard(newBoard)
-    setTurnNumber(1)
-    setTurnHistory([])
-    turnHistoryRef.current = []
-    setPhase('clue')
-    setClueInput('')
-    setNumberInput(2)
-    setCurrentClue(null)
-    setCurrentTurnGuesses([])
-    setLlmResponse(null)
-    setRevealingIndex(-1)
-    setShowKey(true)
-    setGameOverReason(null)
-    setClueError('')
-    abortRef.current = false
     setStage('playing')
-  }, [])
+    dealHand(1, STARTING_CHIPS, STARTING_CHIPS, STARTING_CHIPS, new Set(ALL_LETTERS), [])
+  }, [dealHand])
 
-  // ── CLUE SUBMISSION ──
+  // ── SUBMIT MESSAGE ──
 
-  const submitClue = useCallback(async () => {
-    const word = clueInput.trim().toUpperCase()
+  const submitMessage = useCallback(async (skip = false) => {
+    const msg = skip ? '' : messageInput.trim()
 
-    if (!word) { setClueError('Enter a clue word'); return }
-    if (!/^[A-Z-]+$/i.test(word)) { setClueError('Letters and hyphens only'); return }
-    if (word.includes(' ')) { setClueError('Must be a single word'); return }
-    if (board.some(c => !c.revealed && c.word === word)) {
-      setClueError("Can't use a word on the board"); return
-    }
-    if (numberInput < 1) { setClueError('Number must be at least 1'); return }
-
-    setClueError('')
+    const newPool = msg ? consumeLetters(msg, letterPool) : letterPool
+    setLetterPool(newPool)
+    setPhase('thinking')
     setError('')
-    const clue = { word, number: numberInput }
-    setCurrentClue(clue)
-    setCurrentTurnGuesses([])
-    setLlmResponse(null)
+    setLlmAction(null)
 
-    await speakAndWait(`${word}, ${numberInput}`, 'narrator')
-
-    runGuessLoop(clue, numberInput, 0, [], board, turnHistoryRef.current)
-  }, [clueInput, numberInput, board])
-
-  // ── LLM GUESS LOOP ──
-
-  const runGuessLoop = async (clue, remaining, guessesMade, turnGuesses, curBoard, history) => {
-    if (abortRef.current || remaining <= 0) {
-      endTurn(clue, turnGuesses, false)
-      return
+    if (msg) {
+      await speakAndWait(msg, 'narrator').catch(() => {})
     }
 
-    setPhase('guessing')
-    setLlmResponse(null)
+    try {
+      const prompt = buildAgentPrompt(
+        agentCards, community, pot, agentChips,
+        oppAChips, oppBChips, currentAnte, handNum,
+        handHistoryRef.current, msg,
+      )
+      const response = await getSingleResponseWithTimeout(prompt, {
+        maxTokens: 150,
+        timeoutMs: 25000,
+        temperature: 0.7,
+      })
 
-    const unrevealed = curBoard.filter(c => !c.revealed).map(c => c.word)
-    let retries = 0
+      if (abortRef.current) return
 
-    while (retries <= MAX_LLM_RETRIES) {
-      try {
-        const prompt = buildGuessPrompt(curBoard, clue, history, remaining, guessesMade)
-        const response = await getSingleResponseWithTimeout(prompt, {
-          maxTokens: 150,
-          timeoutMs: 25000,
-          temperature: 0.7,
-        })
+      const parsed = parseAgentAction(response, agentChips)
+      setLlmAction(parsed)
 
-        if (abortRef.current) return
+      const actionSpeak = parsed.action === 'fold' ? 'I fold.'
+        : parsed.action === 'check' ? 'I check.'
+        : `I bet ${parsed.amount}.`
+      await speakAndWait(`${actionSpeak} ${parsed.thinking}`, 'avatar').catch(() => {})
 
-        const parsed = parseGuessResponse(response, unrevealed)
-        setLlmResponse(parsed)
+      resolveHand(parsed, msg, newPool)
 
-        // PASS
-        if (parsed.word === 'PASS') {
-          await speakAndWait(`I'll pass. ${parsed.thinking}`, 'avatar')
-          endTurn(clue, turnGuesses, true)
-          return
-        }
-
-        // Invalid parse → retry
-        if (!parsed.word) {
-          retries++
-          if (retries > MAX_LLM_RETRIES) {
-            setError(`Agent couldn't pick a valid word. Raw: ${response?.substring(0, 200)}`)
-            endTurn(clue, turnGuesses, false)
-            return
-          }
-          continue
-        }
-
-        // Valid guess
-        await speakAndWait(`${parsed.word}. ${parsed.thinking}`, 'avatar')
-
-        const cellIndex = curBoard.findIndex(c => !c.revealed && c.word === parsed.word)
-        if (cellIndex === -1) {
-          retries++
-          continue
-        }
-
-        // Reveal animation
-        setRevealingIndex(cellIndex)
-        await new Promise(r => setTimeout(r, 900))
-
-        const cell = curBoard[cellIndex]
-        const newBoard = curBoard.map((c, i) =>
-          i === cellIndex ? { ...c, revealed: true } : c
-        )
-        setBoard(newBoard)
-        setRevealingIndex(-1)
-
-        if (cell.color === 'blue') playSfx('resultGood')
-        else playSfx('resultBad')
-
-        const guessRecord = { word: parsed.word, color: cell.color, thinking: parsed.thinking }
-        const newTurnGuesses = [...turnGuesses, guessRecord]
-        setCurrentTurnGuesses(newTurnGuesses)
-
-        // Check game over
-        const over = checkGameOver(newBoard)
-        if (over) {
-          const finalScore = calcScore(newBoard)
-          setGameOverReason(over)
-          recordTurn(clue, newTurnGuesses, false)
-          await new Promise(r => setTimeout(r, 600))
-          setPhase('clue')
-          setStage('gameover')
-          if (gameState) {
-            handleSaveState({
-              ...gameState,
-              gamesPlayed: (gameState.gamesPlayed || 0) + 1,
-              bestScore: Math.max(gameState.bestScore || 0, finalScore),
-            })
-          }
-          return
-        }
-
-        // Continue or end turn
-        if (cell.color === 'blue' && remaining - 1 > 0) {
-          await new Promise(r => setTimeout(r, 400))
-          runGuessLoop(clue, remaining - 1, guessesMade + 1, newTurnGuesses, newBoard, history)
-        } else {
-          endTurn(clue, newTurnGuesses, false)
-        }
-        return
-
-      } catch (err) {
-        if (abortRef.current) return
-        if (err instanceof LlmError) {
-          const prefix = err.fatal ? '[Config Error]' : `[LLM ${err.code}]`
-          setError(`${prefix} ${err.message}`)
-        } else {
-          setError(`LLM error: ${err.message}`)
-        }
-        endTurn(clue, turnGuesses, false)
-        return
+    } catch (err) {
+      if (abortRef.current) return
+      if (err instanceof LlmError) {
+        setError(`[${err.fatal ? 'Config' : err.code}] ${err.message}`)
+      } else {
+        setError(`LLM error: ${err.message}`)
       }
+      resolveHand({ action: 'check', amount: 0, thinking: 'Error — defaulting to check' }, msg, newPool)
+    }
+  }, [messageInput, letterPool, agentCards, community, pot, agentChips, oppAChips, oppBChips, currentAnte, handNum])
+
+  // ── RESOLVE HAND ──
+
+  const resolveHand = (agentAction, coachMsg, pool) => {
+    const oppARank = evaluateHand(oppACards, community)
+    const oppBRank = evaluateHand(oppBCards, community)
+    const agentRank = evaluateHand(agentCards, community)
+
+    const oppADecision = oppAChips > 0
+      ? opponentDecision(oppARank, 'tight', agentAction.action, agentAction.amount, oppAChips)
+      : { action: 'fold', amount: 0 }
+    const oppBDecision = oppBChips > 0
+      ? opponentDecision(oppBRank, 'aggressive', agentAction.action, agentAction.amount, oppBChips)
+      : { action: 'fold', amount: 0 }
+
+    let finalPot = pot
+    let aChips = agentChips
+    let oAChips = oppAChips
+    let oBChips = oppBChips
+
+    const players = []
+
+    if (agentAction.action === 'fold') {
+      players.push({ name: 'Your Agent', folded: true, rank: agentRank })
+    } else {
+      if (agentAction.action === 'bet') {
+        const bet = Math.min(agentAction.amount, aChips)
+        aChips -= bet
+        finalPot += bet
+      }
+      players.push({ name: 'Your Agent', folded: false, rank: agentRank })
+    }
+
+    if (oppADecision.action === 'fold') {
+      players.push({ name: 'Opp A', folded: true, rank: oppARank })
+    } else {
+      if (agentAction.action === 'bet' && oppADecision.action === 'call') {
+        const call = Math.min(agentAction.amount, oAChips)
+        oAChips -= call
+        finalPot += call
+      }
+      players.push({ name: 'Opp A', folded: false, rank: oppARank })
+    }
+
+    if (oppBDecision.action === 'fold') {
+      players.push({ name: 'Opp B', folded: true, rank: oppBRank })
+    } else {
+      if (agentAction.action === 'bet' && oppBDecision.action === 'call') {
+        const call = Math.min(agentAction.amount, oBChips)
+        oBChips -= call
+        finalPot += call
+      }
+      players.push({ name: 'Opp B', folded: false, rank: oppBRank })
+    }
+
+    const active = players.filter(p => !p.folded)
+    let winner = null
+    if (active.length === 0) {
+      winner = players[0]
+    } else if (active.length === 1) {
+      winner = active[0]
+    } else {
+      winner = active.reduce((best, p) =>
+        compareRanks(p.rank, best.rank) > 0 ? p : best
+      )
+    }
+
+    if (winner.name === 'Your Agent') aChips += finalPot
+    else if (winner.name === 'Opp A') oAChips += finalPot
+    else oBChips += finalPot
+
+    const result = {
+      players: players.map(p => ({
+        ...p,
+        desc: describeHand(p.rank),
+        category: handCategory(p.rank),
+        isWinner: p.name === winner.name,
+        chipChange: p.name === winner.name ? finalPot - (
+          p.name === 'Your Agent' ? currentAnte + (agentAction.action === 'bet' ? Math.min(agentAction.amount, agentChips) : 0)
+          : p.name === 'Opp A' ? currentAnte + (oppADecision.action === 'call' && agentAction.action === 'bet' ? Math.min(agentAction.amount, oppAChips) : 0)
+          : currentAnte + (oppBDecision.action === 'call' && agentAction.action === 'bet' ? Math.min(agentAction.amount, oppBChips) : 0)
+        ) : p.folded ? -currentAnte : -(
+          currentAnte + (agentAction.action === 'bet' && !p.folded ? (
+            p.name === 'Opp A' ? Math.min(agentAction.amount, oppAChips)
+            : p.name === 'Opp B' ? Math.min(agentAction.amount, oppBChips)
+            : Math.min(agentAction.amount, agentChips)
+          ) : 0)
+        ),
+      })),
+      winner: winner.name,
+      pot: finalPot,
+    }
+
+    if (agentAction.action === 'fold') playSfx('resultBad')
+    else if (winner.name === 'Your Agent') playSfx('resultGood')
+    else playSfx('resultBad')
+
+    const histEntry = {
+      num: handNum,
+      agentCards: cardsStr(agentCards),
+      community: cardsStr(community),
+      agentAction: agentAction.action === 'bet'
+        ? `bet ${agentAction.amount}` : agentAction.action,
+      result: `${winner.name} won ${finalPot} chips (${describeHand(winner.rank)})`,
+      coachMsg: coachMsg,
+    }
+
+    const newHistory = [...handHistoryRef.current, histEntry]
+    setHandHistory(newHistory)
+    handHistoryRef.current = newHistory
+    setAgentChips(aChips)
+    setOppAChips(oAChips)
+    setOppBChips(oBChips)
+    setHandResult(result)
+    setPhase('result')
+
+    if (handNum >= TOTAL_HANDS || aChips <= 0) {
+      setTimeout(() => {
+        setStage('gameover')
+        if (gameState) {
+          handleSaveState({
+            ...gameState,
+            gamesPlayed: (gameState.gamesPlayed || 0) + 1,
+            bestChips: Math.max(gameState.bestChips || 0, aChips),
+          })
+        }
+      }, 2000)
     }
   }
 
-  const recordTurn = (clue, guesses, passed) => {
-    setTurnHistory(prev => {
-      const next = [...prev, { clue, guesses, passed }]
-      turnHistoryRef.current = next
-      return next
-    })
-  }
+  // ── NEXT HAND ──
 
-  const endTurn = (clue, guesses, passed) => {
-    recordTurn(clue, guesses, passed)
-    setCurrentClue(null)
-    setClueInput('')
-    setLlmResponse(null)
-    setCurrentTurnGuesses([])
-    setPhase('clue')
-    setTurnNumber(prev => prev + 1)
-    setTimeout(() => clueInputRef.current?.focus(), 100)
+  const nextHand = useCallback(() => {
+    dealHand(handNum + 1, agentChips, oppAChips, oppBChips, letterPool, handHistoryRef.current)
+  }, [handNum, agentChips, oppAChips, oppBChips, letterPool, dealHand])
+
+  // ── INPUT FILTER ──
+
+  const handleInputChange = (e) => {
+    const raw = e.target.value
+    let filtered = ''
+    for (const ch of raw) {
+      if (/[^a-zA-Z]/.test(ch)) { filtered += ch; continue }
+      if (letterPool.has(ch.toUpperCase())) filtered += ch
+    }
+    setMessageInput(filtered)
   }
 
   // ── RENDER HELPERS ──
 
-  const score = calcScore(board)
-  const blueRemaining = countUnrevealed(board, 'blue')
-  const redRemaining = countUnrevealed(board, 'red')
-  const maxClueNumber = Math.max(1, blueRemaining)
+  const currentPending = pendingLetters(messageInput, letterPool)
+  const agentRank = agentCards.length && community.length
+    ? evaluateHand(agentCards, community) : null
 
   // ── LOADING ──
 
@@ -450,25 +461,24 @@ export default function GameShell() {
       <div className="app-mode">
         <div className="app-card app-onboarding-shell">
           <div className="app-onboarding-hero">
-            <h2 className="app-onboarding-title">dangerguessr</h2>
+            <h2 className="app-onboarding-title">Big Blind</h2>
             <p className="app-onboarding-copy">
-              You're the spymaster. Give one-word clues to guide your AI partner
-              to the right words on the board.
+              Your AI agent is playing poker — but can't see the other players' cards.
+              You can. Help them win, but every letter you type is gone forever.
             </p>
             <p className="app-onboarding-copy">
-              Blue words score points. Red words lose points. Hit the black word
-              and the game ends instantly.
+              26 letters. 5 hands. Choose your words carefully.
             </p>
           </div>
           {error && <div className="app-error">{error}</div>}
           <button
             className="app-btn app-btn-primary app-onboarding-cta"
             onClick={() => {
-              const init = { gamesPlayed: 0, bestScore: 0, createdAt: new Date().toISOString() }
+              const init = { gamesPlayed: 0, bestChips: 0, createdAt: new Date().toISOString() }
               handleSaveState(init).then(() => startGame())
             }}
           >
-            Play
+            Deal Me In
           </button>
         </div>
       </div>
@@ -478,169 +488,180 @@ export default function GameShell() {
   // ── PLAYING ──
 
   if (stage === 'playing') {
+    const ante = ANTES[handNum - 1]
+
     return (
-      <div className="app-mode cn-game">
-        <div className="cn-layout">
-          <div className="cn-header">
-            <div className="cn-score">
-              <span className="cn-score-value">{score}</span>
-              <span className="cn-score-label">Score</span>
+      <div className="app-mode bb-game">
+        <div className="bb-layout">
+          <div className="bb-header">
+            <div className="bb-hand-info">
+              <span className="bb-hand-num">Hand {handNum}/{TOTAL_HANDS}</span>
+              <span className="bb-blinds">Ante {ante}</span>
             </div>
-            <div className="cn-remaining">
-              <span className="cn-blue-count">{blueRemaining}</span>
-              <span className="cn-red-count">{redRemaining}</span>
+            <div className="bb-pot-display">
+              <span className="bb-pot-value">{pot}</span>
+              <span className="bb-pot-label">Pot</span>
             </div>
-            <div className="cn-turn">
-              <span className="cn-turn-value">{turnNumber}</span>
-              <span className="cn-turn-label">Turn</span>
+            <div className="bb-agent-stack">
+              <span className="bb-agent-stack-value">{agentChips}</span>
+              <span className="bb-agent-stack-label">Your chips</span>
             </div>
           </div>
 
-          <div className="cn-board">
-            {board.map((cell, i) => {
-              const isRevealing = revealingIndex === i
-              const showColor = cell.revealed || isRevealing
-              const keyTint = showKey && !cell.revealed && !isRevealing
-
-              return (
-                <div
-                  key={i}
-                  className={[
-                    'cn-cell',
-                    showColor ? `cn-cell-${cell.color}` : '',
-                    cell.revealed ? 'cn-cell-revealed' : '',
-                    isRevealing ? 'cn-cell-revealing' : '',
-                    keyTint ? `cn-cell-key-${cell.color}` : '',
-                  ].filter(Boolean).join(' ')}
-                >
-                  <span className="cn-cell-word">{cell.word}</span>
-                </div>
-              )
-            })}
+          {/* Opponents — secret intel */}
+          <div className="bb-opponents">
+            <div className={`bb-opponent ${oppAChips <= 0 ? 'bb-eliminated' : ''}`}>
+              <span className="bb-opp-label">A</span>
+              <div className="bb-opp-cards">
+                {oppACards.map((c, i) => <Card key={i} card={c} />)}
+              </div>
+              <span className="bb-intel-tag">intel</span>
+              <span className="bb-opp-chips">{oppAChips}</span>
+            </div>
+            <div className={`bb-opponent ${oppBChips <= 0 ? 'bb-eliminated' : ''}`}>
+              <span className="bb-opp-label">B</span>
+              <div className="bb-opp-cards">
+                {oppBCards.map((c, i) => <Card key={i} card={c} />)}
+              </div>
+              <span className="bb-intel-tag">intel</span>
+              <span className="bb-opp-chips">{oppBChips}</span>
+            </div>
           </div>
 
-          <div className="cn-activity">
+          {/* Community cards */}
+          <div className="bb-community">
+            <span className="bb-community-label">Board</span>
+            <div className="bb-community-cards">
+              {community.map((c, i) => <Card key={i} card={c} />)}
+            </div>
+          </div>
+
+          {/* Agent's hand */}
+          <div className="bb-agent-hand">
+            <span className="bb-agent-hand-label">Agent</span>
+            {agentCards.map((c, i) => <Card key={i} card={c} />)}
+            {agentRank && (
+              <span className="bb-agent-hand-desc">{describeHand(agentRank)}</span>
+            )}
+          </div>
+
+          {/* Activity / LLM */}
+          <div className="bb-activity">
             {error && (
-              <div className="app-error" style={{ fontSize: '0.78rem', marginBottom: 4 }}>{error}</div>
+              <div className="app-error" style={{ fontSize: '0.75rem', marginBottom: 3 }}>{error}</div>
             )}
 
-            {currentClue && (
-              <div className="cn-current-clue">
-                Clue: <strong>{currentClue.word}</strong> {currentClue.number}
+            {phase === 'thinking' && !llmAction && (
+              <div className="bb-thinking">
+                <span className="bb-thinking-dot" />
+                Agent is deciding...
               </div>
             )}
 
-            {phase === 'guessing' && !llmResponse && (
-              <div className="cn-thinking">
-                <span className="cn-thinking-dot" />
-                Thinking...
-              </div>
-            )}
-
-            {llmResponse && (
-              <div className="cn-guess-result">
-                {llmResponse.word === 'PASS' ? (
-                  <span className="cn-guess-pass">Passed — {llmResponse.thinking}</span>
-                ) : llmResponse.word ? (
-                  <>
-                    <span className="cn-guess-word">{llmResponse.word}</span>
-                    {llmResponse.thinking && (
-                      <span className="cn-guess-reason">{llmResponse.thinking}</span>
-                    )}
-                  </>
-                ) : (
-                  <span className="cn-guess-pass">Couldn't parse response</span>
+            {llmAction && (
+              <>
+                <span className={`bb-action-text bb-action-${llmAction.action}`}>
+                  {llmAction.action === 'fold' ? 'FOLD'
+                    : llmAction.action === 'check' ? 'CHECK'
+                    : `BET ${llmAction.amount}`}
+                </span>
+                {llmAction.thinking && (
+                  <span className="bb-thinking-text">{llmAction.thinking}</span>
                 )}
-              </div>
+              </>
             )}
 
-            {currentTurnGuesses.length > 0 && (
-              <div className="cn-turn-guesses">
-                {currentTurnGuesses.map((g, i) => (
-                  <span key={i} className={`cn-guess-chip cn-guess-chip-${g.color}`}>
-                    {g.word}
-                  </span>
-                ))}
+            {phase === 'input' && handHistory.length === 0 && (
+              <div className="bb-waiting-msg">
+                Send a message to your agent — or skip to let them play blind.
               </div>
-            )}
-
-            {phase === 'clue' && !currentClue && turnHistory.length === 0 && (
-              <div className="cn-waiting-msg">Give a clue to start guessing</div>
             )}
           </div>
 
-          {phase === 'clue' && (
-            <div className="cn-input-area">
-              {clueError && <div className="cn-clue-error">{clueError}</div>}
-              <div className="cn-clue-row">
-                <input
-                  ref={clueInputRef}
-                  className="cn-clue-input"
-                  type="text"
-                  placeholder="Enter clue word..."
-                  value={clueInput}
-                  onChange={e => {
-                    setClueInput(e.target.value.replace(/\s/g, ''))
-                    setClueError('')
-                  }}
-                  onKeyDown={e => { if (e.key === 'Enter') submitClue() }}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                />
-              </div>
-              <div className="cn-submit-row">
-                <div className="cn-number-stepper">
-                  <span className="cn-stepper-label"># guesses</span>
-                  <button
-                    className="cn-stepper-btn"
-                    onClick={() => setNumberInput(p => Math.min(maxClueNumber, p + 1))}
-                    disabled={numberInput >= maxClueNumber}
-                  >▲</button>
-                  <input
-                    className="cn-number-input"
-                    type="text"
-                    inputMode="numeric"
-                    value={numberInput}
-                    onChange={e => {
-                      const v = parseInt(e.target.value)
-                      if (!isNaN(v) && v >= 1 && v <= maxClueNumber) setNumberInput(v)
-                    }}
-                  />
-                  <button
-                    className="cn-stepper-btn"
-                    onClick={() => setNumberInput(p => Math.max(1, p - 1))}
-                    disabled={numberInput <= 1}
-                  >▼</button>
+          {/* Result */}
+          {phase === 'result' && handResult && (
+            <div className="bb-result">
+              {handResult.players.map((p, i) => (
+                <div key={i} className={`bb-result-line ${p.folded ? 'bb-result-fold' : ''} ${p.isWinner ? 'bb-result-winner' : ''}`}>
+                  <span>
+                    {p.name}: {p.folded ? 'Folded' : p.category}
+                    {p.isWinner && ' ★'}
+                  </span>
+                  <span className={`bb-chip-change ${p.chipChange >= 0 ? 'bb-chip-gain' : 'bb-chip-loss'}`}>
+                    {p.chipChange >= 0 ? '+' : ''}{p.chipChange}
+                  </span>
                 </div>
+              ))}
+              {handNum < TOTAL_HANDS && agentChips > 0 && (
+                <button className="app-btn app-btn-primary bb-next-btn" onClick={nextHand}>
+                  Next Hand
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Letter grid */}
+          <div className="bb-letter-section">
+            <span className="bb-letter-section-label">Letter Pool</span>
+            <div className="bb-letter-grid">
+              {ALL_LETTERS.map(l => {
+                const isPending = currentPending.has(l)
+                const isAvailable = letterPool.has(l)
+                return (
+                  <span
+                    key={l}
+                    className={`bb-letter ${isPending ? 'bb-letter-pending' : isAvailable ? 'bb-letter-available' : 'bb-letter-used'}`}
+                  >
+                    {l}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Input */}
+          {phase === 'input' && (
+            <div className="bb-input-area">
+              <input
+                ref={inputRef}
+                className="bb-message-input"
+                type="text"
+                placeholder="Advise your agent..."
+                value={messageInput}
+                onChange={handleInputChange}
+                onKeyDown={e => { if (e.key === 'Enter' && messageInput.trim()) submitMessage(false) }}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+              <div className="bb-input-row">
                 <button
-                  className="app-btn app-btn-primary cn-submit-btn"
-                  onClick={submitClue}
-                  disabled={!clueInput.trim()}
+                  className="app-btn app-btn-primary bb-send-btn"
+                  onClick={() => submitMessage(false)}
+                  disabled={!messageInput.trim()}
                 >
-                  Give Clue
+                  Send
+                </button>
+                <button
+                  className="app-btn bb-skip-btn"
+                  onClick={() => submitMessage(true)}
+                >
+                  Skip
                 </button>
               </div>
             </div>
           )}
 
-          {phase === 'guessing' && (
-            <div className="cn-waiting-msg">Your agent is guessing...</div>
+          {phase === 'thinking' && (
+            <div className="bb-waiting-msg">Waiting for agent...</div>
           )}
 
-          <div className="cn-bottom-bar">
+          <div className="bb-bottom-bar">
             <button
-              className="cn-help-btn"
+              className="bb-help-btn"
               onClick={() => setShowHelp(true)}
               data-no-sfx
             >How to Play</button>
-            <button
-              className={`cn-key-toggle ${showKey ? 'cn-key-active' : ''}`}
-              onClick={() => setShowKey(p => !p)}
-              data-no-sfx
-            >
-              {showKey ? 'Key On' : 'Key Off'}
-            </button>
             <label className="app-music-toggle" data-no-sfx>
               <input
                 type="checkbox"
@@ -657,25 +678,29 @@ export default function GameShell() {
           </div>
 
           {showHelp && (
-            <div className="cn-help-overlay" onClick={() => setShowHelp(false)}>
-              <div className="cn-help-modal" onClick={e => e.stopPropagation()}>
-                <h3 className="cn-help-title">How to Play</h3>
-                <ul className="cn-help-list">
-                  <li><span className="cn-help-swatch cn-swatch-blue" /> <strong>Blue</strong> words are safe. +1 point each.</li>
-                  <li><span className="cn-help-swatch cn-swatch-red" /> <strong>Red</strong> words are dangerous. −1 point each.</li>
-                  <li><span className="cn-help-swatch cn-swatch-neutral" /> <strong>Tan</strong> words are neutral. End the turn.</li>
-                  <li><span className="cn-help-swatch cn-swatch-black" /> <strong>Purple</strong> word is the assassin. Ends the game.</li>
-                </ul>
-                <p className="cn-help-text">
-                  Give a <strong>one-word clue</strong> and a <strong>number</strong> to
-                  tell your AI agent how many board words relate to it.
-                  The agent guesses that many words one at a time.
+            <div className="bb-help-overlay" onClick={() => setShowHelp(false)}>
+              <div className="bb-help-modal" onClick={e => e.stopPropagation()}>
+                <h3 className="bb-help-title">How to Play</h3>
+                <p className="bb-help-text">
+                  Your AI agent is playing <strong>5 hands of poker</strong> against two opponents.
+                  Everyone starts with <strong>100 chips</strong>. Antes escalate each hand.
                 </p>
-                <p className="cn-help-text">
-                  Toggle <strong>Key</strong> to see which color each word is.
-                  Game ends when all blues, all reds, or the assassin is found.
+                <p className="bb-help-text">
+                  You can see the opponents' cards — your agent can't.
+                  Type a message to advise them before each hand.
                 </p>
-                <button className="app-btn app-btn-primary cn-help-close" onClick={() => setShowHelp(false)}>
+                <p className="bb-help-text">
+                  <strong>The catch:</strong> each letter of the alphabet (A–Z) can only be
+                  used <strong>once</strong> across the entire game. Numbers, spaces, and
+                  punctuation are free. Choose wisely.
+                </p>
+                <p className="bb-help-text">
+                  The agent can <strong>fold</strong> (forfeit ante),
+                  <strong> check</strong> (play for current pot), or
+                  <strong> bet</strong> (raise the stakes).
+                  Your final score is the agent's chip count after 5 hands.
+                </p>
+                <button className="app-btn app-btn-primary bb-help-close" onClick={() => setShowHelp(false)}>
                   Got it
                 </button>
               </div>
@@ -689,45 +714,57 @@ export default function GameShell() {
   // ── GAME OVER ──
 
   if (stage === 'gameover') {
-    const endMessage = gameOverReason === 'all-blue'
-      ? 'All agents found!'
-      : gameOverReason === 'all-red'
-        ? 'All enemy agents exposed...'
-        : 'The assassin was contacted!'
+    const standings = [
+      { name: 'Your Agent', chips: agentChips, isAgent: true },
+      { name: 'Opponent A', chips: oppAChips, isAgent: false },
+      { name: 'Opponent B', chips: oppBChips, isAgent: false },
+    ].sort((a, b) => b.chips - a.chips)
+
+    const rank = standings.findIndex(s => s.isAgent) + 1
+    const rankLabel = rank === 1 ? '1st Place!' : rank === 2 ? '2nd Place' : '3rd Place'
+    const lettersUsed = 26 - letterPool.size
 
     return (
-      <div className="app-mode cn-game">
-        <div className="cn-layout">
-          <div className="cn-gameover-header">
-            <h2 className="cn-gameover-title">Game Over</h2>
-            <p className="cn-gameover-reason">{endMessage}</p>
-            <div className="cn-gameover-score">
-              <span className="cn-gameover-score-value">{score}</span>
-              <span className="cn-gameover-score-label">Final Score</span>
+      <div className="app-mode bb-game">
+        <div className="bb-layout" style={{ justifyContent: 'center', gap: 12 }}>
+          <div className="bb-gameover-header">
+            <h2 className="bb-gameover-title">{rankLabel}</h2>
+            <p className="bb-gameover-sub">Tournament Complete</p>
+            <div className="bb-gameover-chips">
+              <span className="bb-gameover-chips-value">{agentChips}</span>
+              <span className="bb-gameover-chips-label">Final Chips</span>
             </div>
           </div>
 
-          <div className="cn-board cn-board-final">
-            {board.map((cell, i) => (
-              <div
-                key={i}
-                className={[
-                  'cn-cell',
-                  `cn-cell-${cell.color}`,
-                  cell.revealed ? 'cn-cell-revealed' : 'cn-cell-missed',
-                ].join(' ')}
-              >
-                <span className="cn-cell-word">{cell.word}</span>
+          <div className="bb-gameover-standings">
+            {standings.map((s, i) => (
+              <div key={i} className={`bb-standing-row ${s.isAgent ? 'bb-standing-row-agent' : ''}`}>
+                <span className="bb-standing-rank">#{i + 1}</span>
+                <span className="bb-standing-name">{s.name}</span>
+                <span className="bb-standing-chips">{s.chips}</span>
               </div>
             ))}
           </div>
 
-          <button className="app-btn app-btn-primary cn-play-again" onClick={startGame}>
-            Play Again
-          </button>
-          <button className="app-btn app-btn-secondary" onClick={() => setStage('dashboard')}>
-            Menu
-          </button>
+          <div className="bb-gameover-letters">
+            <div className="bb-gameover-letters-label">Letters used: {lettersUsed}/26</div>
+            <div className="bb-letter-grid">
+              {ALL_LETTERS.map(l => (
+                <span key={l} className={`bb-letter ${letterPool.has(l) ? 'bb-letter-available' : 'bb-letter-used'}`}>
+                  {l}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="bb-gameover-actions">
+            <button className="app-btn app-btn-primary" onClick={startGame}>
+              Play Again
+            </button>
+            <button className="app-btn app-btn-secondary" onClick={() => setStage('dashboard')}>
+              Menu
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -739,8 +776,8 @@ export default function GameShell() {
     <div className="app-mode app-mode-dashboard">
       <div className="app-dashboard-shell">
         <div className="app-title-block">
-          <h2 className="app-title">dangerguessr</h2>
-          <p className="app-title-sub">Guide Your Agent</p>
+          <h2 className="app-title">Big Blind</h2>
+          <p className="app-title-sub">26 Letters. 5 Hands.</p>
           <hr className="app-title-rule" />
         </div>
 
@@ -749,8 +786,8 @@ export default function GameShell() {
 
           <div className="app-card" style={{ alignItems: 'center', gap: 12 }}>
             <p className="app-muted" style={{ textAlign: 'center', margin: 0, fontSize: '0.92rem' }}>
-              Give one-word clues to help your AI partner find the safe words
-              on a 4×4 board. Avoid the reds and the assassin.
+              Your AI agent plays poker. You see everyone's cards.
+              Advise your agent — but each letter of the alphabet can only be used once.
             </p>
           </div>
 
@@ -761,8 +798,8 @@ export default function GameShell() {
                 <span className="app-stat-label">Games Played</span>
               </div>
               <div className="app-stat-card">
-                <span className="app-stat-value">{gameState.bestScore || 0}</span>
-                <span className="app-stat-label">Best Score</span>
+                <span className="app-stat-value">{gameState.bestChips || 0}</span>
+                <span className="app-stat-label">Best Chips</span>
               </div>
             </div>
           )}
