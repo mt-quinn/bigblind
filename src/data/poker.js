@@ -126,6 +126,18 @@ function describeHand(rank) {
   }
 }
 
+function describeHandVerbose(rank) {
+  const vn = v => VALUE_FULL[v] || String(v)
+  const base = describeHand(rank)
+  switch (rank[0]) {
+    case 1: return rank[2] ? `${base}, ${vn(rank[2])} kicker` : base
+    case 2: return rank[3] ? `${base}, ${vn(rank[3])} kicker` : base
+    case 3: return rank[2] ? `${base}, ${vn(rank[2])} kicker` : base
+    case 7: return rank[2] ? `${base}, ${vn(rank[2])} kicker` : base
+    default: return base
+  }
+}
+
 function handCategory(rank) {
   return ['High Card', 'Pair', 'Two Pair', 'Three of a Kind', 'Straight',
     'Flush', 'Full House', 'Four of a Kind', 'Straight Flush'][rank[0]]
@@ -152,6 +164,6 @@ export {
   ANTES, TOTAL_HANDS, STARTING_CHIPS,
   createDeck, shuffleDeck, dealFrom,
   valueDisplay, suitSymbol, cardStr, cardsStr, cardSpoken, isRed,
-  evaluateHand, compareRanks, describeHand, handCategory, handStrength,
+  evaluateHand, compareRanks, describeHand, describeHandVerbose, handCategory, handStrength,
   opponentDecision,
 }

@@ -12,7 +12,7 @@ import {
   ANTES, TOTAL_HANDS, STARTING_CHIPS,
   createDeck, shuffleDeck, dealFrom,
   valueDisplay, suitSymbol, cardStr, cardsStr, cardSpoken, isRed,
-  evaluateHand, compareRanks, describeHand, handCategory,
+  evaluateHand, compareRanks, describeHand, describeHandVerbose, handCategory,
   opponentDecision,
 } from '../data/poker'
 import './GameShell.css'
@@ -303,44 +303,57 @@ export default function GameShell() {
       ? opponentDecision(oppBRank, 'aggressive', agentAction.action, agentAction.amount, oppBChips)
       : { action: 'fold', amount: 0 }
 
+    const agentAnte = Math.min(currentAnte, agentChips)
+    const oppAAnteAmt = Math.min(currentAnte, oppAChips)
+    const oppBAnteAmt = Math.min(currentAnte, oppBChips)
+
     let finalPot = pot
     let aChips = agentChips
     let oAChips = oppAChips
     let oBChips = oppBChips
 
+    const agentInvest = agentAnte
+    let oppAInvest = oppAAnteAmt
+    let oppBInvest = oppBAnteAmt
+
     const players = []
 
     if (agentAction.action === 'fold') {
-      players.push({ name: 'Your Agent', folded: true, rank: agentRank })
+      players.push({ name: 'Your Agent', folded: true, rank: agentRank, invested: agentInvest })
     } else {
+      let extraBet = 0
       if (agentAction.action === 'bet') {
-        const bet = Math.min(agentAction.amount, aChips)
-        aChips -= bet
-        finalPot += bet
+        extraBet = Math.min(agentAction.amount, aChips)
+        aChips -= extraBet
+        finalPot += extraBet
       }
-      players.push({ name: 'Your Agent', folded: false, rank: agentRank })
+      players.push({ name: 'Your Agent', folded: false, rank: agentRank, invested: agentInvest + extraBet })
     }
 
     if (oppADecision.action === 'fold') {
-      players.push({ name: 'Opp A', folded: true, rank: oppARank })
+      players.push({ name: 'Opp A', folded: true, rank: oppARank, invested: oppAInvest })
     } else {
+      let extraCall = 0
       if (agentAction.action === 'bet' && oppADecision.action === 'call') {
-        const call = Math.min(agentAction.amount, oAChips)
-        oAChips -= call
-        finalPot += call
+        extraCall = Math.min(agentAction.amount, oAChips)
+        oAChips -= extraCall
+        finalPot += extraCall
       }
-      players.push({ name: 'Opp A', folded: false, rank: oppARank })
+      oppAInvest += extraCall
+      players.push({ name: 'Opp A', folded: false, rank: oppARank, invested: oppAInvest })
     }
 
     if (oppBDecision.action === 'fold') {
-      players.push({ name: 'Opp B', folded: true, rank: oppBRank })
+      players.push({ name: 'Opp B', folded: true, rank: oppBRank, invested: oppBInvest })
     } else {
+      let extraCall = 0
       if (agentAction.action === 'bet' && oppBDecision.action === 'call') {
-        const call = Math.min(agentAction.amount, oBChips)
-        oBChips -= call
-        finalPot += call
+        extraCall = Math.min(agentAction.amount, oBChips)
+        oBChips -= extraCall
+        finalPot += extraCall
       }
-      players.push({ name: 'Opp B', folded: false, rank: oppBRank })
+      oppBInvest += extraCall
+      players.push({ name: 'Opp B', folded: false, rank: oppBRank, invested: oppBInvest })
     }
 
     const active = players.filter(p => !p.folded)
@@ -359,25 +372,25 @@ export default function GameShell() {
     else if (winner.name === 'Opp A') oAChips += finalPot
     else oBChips += finalPot
 
+    const catCounts = {}
+    for (const p of active) {
+      const cat = p.rank[0]
+      catCounts[cat] = (catCounts[cat] || 0) + 1
+    }
+    const needsVerbose = cat => (catCounts[cat] || 0) > 1
+
     const result = {
       players: players.map(p => ({
         ...p,
-        desc: describeHand(p.rank),
+        desc: !p.folded && needsVerbose(p.rank[0])
+          ? describeHandVerbose(p.rank)
+          : describeHand(p.rank),
         category: handCategory(p.rank),
         isWinner: p.name === winner.name,
-        chipChange: p.name === winner.name ? finalPot - (
-          p.name === 'Your Agent' ? currentAnte + (agentAction.action === 'bet' ? Math.min(agentAction.amount, agentChips) : 0)
-          : p.name === 'Opp A' ? currentAnte + (oppADecision.action === 'call' && agentAction.action === 'bet' ? Math.min(agentAction.amount, oppAChips) : 0)
-          : currentAnte + (oppBDecision.action === 'call' && agentAction.action === 'bet' ? Math.min(agentAction.amount, oppBChips) : 0)
-        ) : p.folded ? -currentAnte : -(
-          currentAnte + (agentAction.action === 'bet' && !p.folded ? (
-            p.name === 'Opp A' ? Math.min(agentAction.amount, oppAChips)
-            : p.name === 'Opp B' ? Math.min(agentAction.amount, oppBChips)
-            : Math.min(agentAction.amount, agentChips)
-          ) : 0)
-        ),
+        netChips: p.name === winner.name ? finalPot - p.invested : -p.invested,
       })),
       winner: winner.name,
+      winnerDesc: describeHand(winner.rank),
       pot: finalPot,
     }
 
@@ -444,8 +457,20 @@ export default function GameShell() {
   // ── RENDER HELPERS ──
 
   const currentPending = pendingLetters(messageInput, letterPool)
-  const agentRank = agentCards.length && community.length
-    ? evaluateHand(agentCards, community) : null
+  const hasAll = agentCards.length > 0 && community.length > 0
+  const agentRank = hasAll ? evaluateHand(agentCards, community) : null
+  const oppARank = hasAll && oppACards.length > 0 ? evaluateHand(oppACards, community) : null
+  const oppBRank = hasAll && oppBCards.length > 0 ? evaluateHand(oppBCards, community) : null
+
+  let bestHand = null
+  if (agentRank && oppARank && oppBRank) {
+    const entries = [
+      { key: 'agent', rank: agentRank },
+      { key: 'oppA', rank: oppARank },
+      { key: 'oppB', rank: oppBRank },
+    ]
+    bestHand = entries.reduce((a, b) => compareRanks(b.rank, a.rank) > 0 ? b : a).key
+  }
 
   // ── LOADING ──
 
@@ -520,7 +545,11 @@ export default function GameShell() {
               <div className="bb-opp-cards">
                 {oppACards.map((c, i) => <Card key={i} card={c} />)}
               </div>
-              <span className="bb-intel-tag">intel</span>
+              {oppARank && (
+                <span className={`bb-hand-desc ${bestHand === 'oppA' ? 'bb-best-hand' : ''}`}>
+                  {describeHand(oppARank)}{bestHand === 'oppA' && ' ★'}
+                </span>
+              )}
               <span className="bb-opp-chips">{oppAChips}</span>
             </div>
             <div className={`bb-opponent ${oppBChips <= 0 ? 'bb-eliminated' : ''}`}>
@@ -528,7 +557,11 @@ export default function GameShell() {
               <div className="bb-opp-cards">
                 {oppBCards.map((c, i) => <Card key={i} card={c} />)}
               </div>
-              <span className="bb-intel-tag">intel</span>
+              {oppBRank && (
+                <span className={`bb-hand-desc ${bestHand === 'oppB' ? 'bb-best-hand' : ''}`}>
+                  {describeHand(oppBRank)}{bestHand === 'oppB' && ' ★'}
+                </span>
+              )}
               <span className="bb-opp-chips">{oppBChips}</span>
             </div>
           </div>
@@ -546,7 +579,9 @@ export default function GameShell() {
             <span className="bb-agent-hand-label">Agent</span>
             {agentCards.map((c, i) => <Card key={i} card={c} />)}
             {agentRank && (
-              <span className="bb-agent-hand-desc">{describeHand(agentRank)}</span>
+              <span className={`bb-agent-hand-desc ${bestHand === 'agent' ? 'bb-best-hand' : ''}`}>
+                {describeHand(agentRank)}{bestHand === 'agent' && ' ★'}
+              </span>
             )}
           </div>
 
@@ -586,14 +621,20 @@ export default function GameShell() {
           {/* Result */}
           {phase === 'result' && handResult && (
             <div className="bb-result">
+              <div className="bb-result-headline">
+                <span className={`bb-result-winner-name ${handResult.winner === 'Your Agent' ? 'bb-result-you-won' : 'bb-result-you-lost'}`}>
+                  {handResult.winner === 'Your Agent' ? 'Your agent wins!' : `${handResult.winner} wins`}
+                </span>
+                <span className="bb-result-winning-hand">{handResult.winnerDesc}</span>
+              </div>
               {handResult.players.map((p, i) => (
-                <div key={i} className={`bb-result-line ${p.folded ? 'bb-result-fold' : ''} ${p.isWinner ? 'bb-result-winner' : ''}`}>
-                  <span>
-                    {p.name}: {p.folded ? 'Folded' : p.category}
-                    {p.isWinner && ' ★'}
+                <div key={i} className={`bb-result-player ${p.folded ? 'bb-result-fold' : ''}`}>
+                  <span className="bb-result-player-name">{p.name}</span>
+                  <span className="bb-result-player-action">
+                    {p.folded ? 'Folded' : p.desc}
                   </span>
-                  <span className={`bb-chip-change ${p.chipChange >= 0 ? 'bb-chip-gain' : 'bb-chip-loss'}`}>
-                    {p.chipChange >= 0 ? '+' : ''}{p.chipChange}
+                  <span className={`bb-chip-change ${p.netChips > 0 ? 'bb-chip-gain' : p.netChips < 0 ? 'bb-chip-loss' : ''}`}>
+                    {p.netChips > 0 ? '+' : ''}{p.netChips}
                   </span>
                 </div>
               ))}

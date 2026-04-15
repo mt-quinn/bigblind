@@ -131,16 +131,21 @@
   color: rgba(232, 197, 71, 0.5);
 }
 
-.bb-intel-tag {
-  font-size: 0.5rem;
+.bb-hand-desc {
+  font-size: 0.6rem;
+  color: rgba(240, 240, 255, 0.45);
+  font-style: italic;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bb-best-hand {
+  color: #ffe680;
+  font-style: normal;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(239, 68, 68, 0.7);
-  padding: 1px 5px;
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-radius: 4px;
-  background: rgba(239, 68, 68, 0.08);
 }
 
 /* ── Cards ── */
@@ -304,20 +309,55 @@
   border-radius: 8px;
 }
 
-.bb-result-line {
+.bb-result-headline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 2px;
+}
+
+.bb-result-winner-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.bb-result-you-won { color: #86efac; }
+.bb-result-you-lost { color: #fca5a5; }
+
+.bb-result-winning-hand {
+  font-size: 0.7rem;
+  color: rgba(240, 240, 255, 0.5);
+  font-style: italic;
+}
+
+.bb-result-player {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.75rem;
   color: rgba(240, 240, 255, 0.65);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 2px 0;
 }
 
-.bb-result-winner {
-  color: #ffe680;
+.bb-result-player-name {
   font-weight: 600;
+  min-width: 64px;
+  flex-shrink: 0;
 }
 
-.bb-result-fold { opacity: 0.45; }
+.bb-result-player-action {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(240, 240, 255, 0.45);
+}
+
+.bb-result-fold { opacity: 0.4; }
 
 .bb-chip-change {
   font-weight: 700;
