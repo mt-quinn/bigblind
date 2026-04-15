@@ -1,0 +1,539 @@
+/* ── Template App Shell ──
+ * Generic mobile-first game template CSS.
+ * Prefix: .app- for template-level classes.
+ * Preserves the proven mobile layout, tab, card, form, error, and button patterns.
+ */
+
+/* ── Mode container ── */
+.app-mode {
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 14px;
+  overflow-y: auto;
+  color: #f7f7fb;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-mode.app-mode-dashboard {
+  overflow: hidden;
+}
+
+.app-mode.app-mode-chat {
+  padding: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Cards ── */
+.app-card {
+  background: rgba(14, 11, 33, 0.82);
+  border: 1px solid rgba(200, 170, 80, 0.32);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-card.centered {
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Top bar ── */
+.app-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.app-topbar h2 {
+  margin: 0;
+  font-size: clamp(1.2rem, 3.6vw, 1.9rem);
+  letter-spacing: 0.01em;
+  flex: 1 1 auto;
+  text-align: center;
+}
+
+.app-topbar-spacer {
+  width: 72px;
+  flex: 0 0 72px;
+}
+
+/* ── Back button ── */
+.app-back {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #f5f7ff;
+  border-radius: 9px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+/* ── Muted text ── */
+.app-muted {
+  color: rgba(240, 240, 255, 0.72);
+  font-size: 0.9rem;
+}
+
+/* ── Tabs ── */
+.app-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+
+.app-tab {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: rgba(240, 240, 255, 0.65);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.app-tab.active {
+  background: rgba(232, 197, 71, 0.22);
+  color: #ffe680;
+}
+
+/* ── Dashboard shell ── */
+.app-dashboard-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 10px;
+  overflow: visible;
+}
+
+.app-dashboard-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+/* ── Buttons ── */
+.app-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.app-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.app-btn-primary {
+  background: linear-gradient(135deg, #e8c547 0%, #d4a017 100%);
+  color: #1a1205;
+}
+
+.app-btn-secondary {
+  background: rgba(0, 0, 0, 0.6);
+  color: #f0f0ff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ── Error / status ── */
+.app-error {
+  border: 1px solid rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.15);
+  color: #ffc5c5;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.app-status {
+  border: 1px solid rgba(232, 197, 71, 0.52);
+  background: rgba(232, 197, 71, 0.14);
+  color: #fff7c2;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+/* ── Form fields ── */
+.app-form-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app-field-row {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app-field-row.half { grid-column: span 6; }
+.app-field-row.full { grid-column: span 12; }
+
+.app-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-field-head label {
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.app-field-input-wrap { position: relative; }
+
+.app-field-row input,
+.app-field-row textarea {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(4, 7, 15, 0.8);
+  color: #f8f8ff;
+  padding: 8px 9px;
+  font: inherit;
+}
+
+.app-field-row textarea { resize: vertical; }
+
+.app-field-counter {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  color: rgba(240, 240, 255, 0.58);
+  line-height: 1;
+  pointer-events: none;
+  background: rgba(4, 7, 15, 0.82);
+  padding: 1px 4px;
+  border-radius: 999px;
+}
+
+/* ── Onboarding ── */
+.app-onboarding-shell {
+  max-width: 720px;
+  margin: 0 auto;
+  gap: 14px;
+}
+
+.app-onboarding-hero {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(232, 197, 71, 0.18), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(180, 50, 50, 0.24), transparent 48%),
+    rgba(4, 7, 15, 0.82);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-onboarding-title {
+  margin: 0;
+  color: #fff7ed;
+  font-size: clamp(1.35rem, 3.8vw, 1.9rem);
+  line-height: 1;
+}
+
+.app-onboarding-copy {
+  margin: 0;
+  color: rgba(248, 250, 252, 0.9);
+  font-size: 1rem;
+  line-height: 1.38;
+}
+
+.app-onboarding-cta {
+  min-height: 58px;
+  font-size: 1.06rem;
+}
+
+/* ── Tutorial card ── */
+.app-tutorial-card {
+  border-radius: 12px;
+  border: 1px solid rgba(232, 197, 71, 0.32);
+  background:
+    linear-gradient(135deg, rgba(232, 197, 71, 0.18) 0%, rgba(200, 140, 22, 0.12) 100%),
+    rgba(15, 23, 42, 0.76);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.app-tutorial-body {
+  margin: 0;
+  color: #fff7ed;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* ── Chat shell ── */
+.app-chat-shell {
+  padding: 0;
+  gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-chat-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-chat-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-chat-question {
+  color: #f7f7fb;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.app-chat-answer {
+  color: rgba(240, 240, 255, 0.78);
+  font-size: 0.92rem;
+  font-style: italic;
+}
+
+.app-chat-answer.speaking {
+  color: rgba(240, 240, 255, 0.95);
+}
+
+.app-chat-pending::after {
+  content: '...';
+  animation: app-ellipsis 1.4s steps(4, end) infinite;
+}
+
+@keyframes app-ellipsis {
+  0%  { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+/* ── Chat composer ── */
+.app-chat-composer {
+  flex: 0 0 auto;
+  padding: 10px 14px 14px;
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-chat-input {
+  flex: 1;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(4, 7, 15, 0.8);
+  color: #f8f8ff;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+/* ── Stats grid ── */
+.app-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.app-stat-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.app-stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.app-stat-label {
+  font-size: 0.72rem;
+  color: rgba(240, 240, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+/* ── Overlay ── */
+.app-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: app-fade-in 0.35s ease-out;
+}
+
+@keyframes app-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.app-overlay-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  max-height: 100%;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 420px;
+}
+
+/* ── Music toggle ── */
+.app-music-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  padding: 8px 0 4px;
+  font-size: 0.75rem;
+  color: rgba(240, 240, 255, 0.5);
+  cursor: pointer;
+  user-select: none;
+}
+
+.app-music-toggle input[type="checkbox"] {
+  accent-color: #d4af37;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* ── Portrait (Picrew) ── */
+.app-portrait {
+  position: relative;
+  width: 112px;
+  aspect-ratio: 1;
+  overflow: visible;
+  background: transparent;
+}
+
+.app-portrait.size-lg { width: 144px; }
+.app-portrait.size-md { width: 98px; }
+.app-portrait.size-sm { width: 42px; }
+.app-portrait.size-xs { width: 28px; }
+
+.app-portrait-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: auto;
+}
+
+/* ── Text block ── */
+.app-text-block {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 8px 10px;
+  line-height: 1.45;
+}
+
+/* ── Profile portrait glow ── */
+.app-profile-portrait {
+  filter: drop-shadow(0 0 12px rgba(232, 197, 71, 0.35)) drop-shadow(0 0 28px rgba(232, 197, 71, 0.15));
+}
+
+/* ── Dashboard title ── */
+.app-title-block {
+  padding: 18px 14px 6px;
+  text-align: center;
+}
+
+.app-title {
+  margin: 0;
+  font-size: clamp(1.15rem, 3.4vw, 1.45rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(240, 240, 255, 0.92);
+  line-height: 1.1;
+}
+
+.app-title-sub {
+  margin: 4px 0 0;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(240, 240, 255, 0.38);
+  line-height: 1;
+}
+
+.app-title-rule {
+  display: block;
+  width: 40px;
+  height: 2px;
+  margin: 10px auto 0;
+  border: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+}
+
+/* ── Dashboard decorations ── */
+.app-mode-dashboard .app-card {
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.03), 0 0 2px rgba(255, 255, 255, 0.06);
+}
+
+.app-mode-dashboard .app-btn-primary {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.app-mode-dashboard .app-tab.active {
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.06);
+}

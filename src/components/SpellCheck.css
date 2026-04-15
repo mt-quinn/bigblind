@@ -1,0 +1,417 @@
+/* ── Spell Check Game Styles ── */
+
+/* ── Shared ── */
+
+.sc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  flex: 0 0 auto;
+}
+
+.sc-phase-label {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f7f7fb;
+}
+
+.sc-timer {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #ffe680;
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+  text-align: right;
+  transition: color 0.3s;
+}
+
+.sc-timer-urgent {
+  color: #ff6b6b;
+  animation: sc-pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes sc-pulse {
+  from { opacity: 1; }
+  to { opacity: 0.5; }
+}
+
+.sc-timer-bar {
+  flex: 0 0 auto;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.sc-timer-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #e8c547, #d4a017);
+  transition: width 1s linear;
+  border-radius: 2px;
+}
+
+/* ── Phase 1 ── */
+
+.sc-phase1 {
+  padding: 12px 14px;
+}
+
+.sc-phase1-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+}
+
+.sc-word-display {
+  flex: 0 0 auto;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.sc-current-word {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  min-height: 1.8em;
+  display: flex;
+  align-items: center;
+}
+
+.sc-placeholder {
+  color: rgba(240, 240, 255, 0.3);
+  font-size: 0.9rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.sc-input-error {
+  font-size: 0.78rem;
+  color: #ff8a8a;
+  animation: sc-shake 0.3s ease-in-out;
+}
+
+@keyframes sc-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.sc-letter-tiles {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.sc-tile {
+  width: 48px;
+  height: 54px;
+  border-radius: 10px;
+  border: 2px solid rgba(232, 197, 71, 0.5);
+  background: rgba(232, 197, 71, 0.12);
+  color: #ffe680;
+  font-size: 1.35rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s, background 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sc-tile:active {
+  transform: scale(0.92);
+  background: rgba(232, 197, 71, 0.28);
+}
+
+.sc-word-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+}
+
+.sc-action-btn {
+  flex: 1;
+  padding: 10px 6px !important;
+  font-size: 0.85rem !important;
+}
+
+.sc-bank-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.sc-bank-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(240, 240, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sc-bank-words {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+}
+
+.sc-bank-word {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.82rem;
+  color: #e0e0ff;
+  font-weight: 500;
+}
+
+.sc-bank-empty {
+  color: rgba(240, 240, 255, 0.3);
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
+.sc-skip-btn {
+  flex: 0 0 auto;
+  font-size: 0.9rem !important;
+}
+
+/* ── Phase 2 ── */
+
+.sc-phase2 {
+  padding: 12px 14px;
+}
+
+.sc-phase2-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.sc-scenarios-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.sc-scenario-mini {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(14, 11, 33, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.sc-scenario-done {
+  border-color: rgba(232, 197, 71, 0.2);
+  opacity: 0.7;
+}
+
+.sc-scenario-mini-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(240, 240, 255, 0.65);
+}
+
+.sc-scenario-mini-fills {
+  font-size: 0.78rem;
+  color: #ffe680;
+  font-style: italic;
+  margin-left: auto;
+}
+
+.sc-scenario-active {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: rgba(14, 11, 33, 0.82);
+  border: 1px solid rgba(232, 197, 71, 0.32);
+  border-radius: 14px;
+  overflow-y: auto;
+  animation: sc-card-in 0.3s ease-out;
+}
+
+@keyframes sc-card-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.sc-scenario-portrait {
+  display: flex;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.sc-scenario-text {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #f0f0ff;
+}
+
+.sc-scenario-setup {
+  color: rgba(240, 240, 255, 0.85);
+}
+
+.sc-scenario-blanks {
+  display: inline;
+}
+
+.sc-blank {
+  display: inline-block;
+  margin: 0 3px;
+  color: rgba(232, 197, 71, 0.6);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.sc-filled-word {
+  display: inline-block;
+  margin: 2px 3px;
+  padding: 2px 8px;
+  background: rgba(232, 197, 71, 0.18);
+  border: 1px solid rgba(232, 197, 71, 0.45);
+  border-radius: 6px;
+  color: #ffe680;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.sc-filled-word:hover {
+  background: rgba(232, 197, 71, 0.3);
+}
+
+.sc-filled-locked {
+  cursor: default;
+  pointer-events: none;
+}
+
+.sc-submit-scenario {
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+
+/* ── Word Bank Tray (Phase 2) ── */
+
+.sc-wordbank-tray {
+  flex: 0 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 8px;
+  max-height: 30%;
+}
+
+.sc-wordbank-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 100%;
+  padding-bottom: 2px;
+}
+
+.sc-word-chip {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e0e0ff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.1s, border-color 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sc-word-chip:active {
+  transform: scale(0.94);
+  background: rgba(232, 197, 71, 0.2);
+  border-color: rgba(232, 197, 71, 0.4);
+}
+
+/* ── Playback ── */
+
+.sc-playback {
+  padding: 12px 14px;
+}
+
+.sc-playback-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.sc-playback-counter {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(240, 240, 255, 0.5);
+}
+
+.sc-playback-card {
+  border-color: rgba(232, 197, 71, 0.4);
+}
+
+.sc-resolution-loading {
+  padding: 12px 0;
+  text-align: center;
+}
+
+.sc-resolution-loading .app-muted::after {
+  content: '';
+  animation: app-ellipsis 1.4s steps(4, end) infinite;
+}
+
+.sc-resolution {
+  padding: 12px;
+  background: rgba(232, 197, 71, 0.08);
+  border: 1px solid rgba(232, 197, 71, 0.2);
+  border-radius: 10px;
+  animation: sc-reveal 0.4s ease-out;
+}
+
+@keyframes sc-reveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sc-resolution-text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #f0f0ff;
+  font-style: italic;
+}
