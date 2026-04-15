@@ -633,7 +633,7 @@ export default function GameShell() {
               className="cn-help-btn"
               onClick={() => setShowHelp(true)}
               data-no-sfx
-            >?</button>
+            >How to Play</button>
             <button
               className={`cn-key-toggle ${showKey ? 'cn-key-active' : ''}`}
               onClick={() => setShowKey(p => !p)}
