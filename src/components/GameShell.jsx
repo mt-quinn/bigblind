@@ -429,9 +429,14 @@ export default function GameShell() {
   const handleInputChange = (e) => {
     const raw = e.target.value
     let filtered = ''
+    const usedInMsg = new Set()
     for (const ch of raw) {
       if (/[^a-zA-Z]/.test(ch)) { filtered += ch; continue }
-      if (letterPool.has(ch.toUpperCase())) filtered += ch
+      const upper = ch.toUpperCase()
+      if (letterPool.has(upper) && !usedInMsg.has(upper)) {
+        filtered += ch
+        usedInMsg.add(upper)
+      }
     }
     setMessageInput(filtered)
   }
