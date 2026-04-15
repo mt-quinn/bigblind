@@ -97,7 +97,7 @@ function buildGuessPrompt(board, clue, history, guessesRemaining, guessesMade) {
 
   p += `CURRENT CLUE: "${clue.word}" ${clue.number}\n`
   p += `This means ${clue.number} unrevealed word(s) relate to "${clue.word}".\n`
-  p += `Guesses remaining this turn: ${guessesRemaining}\n\n`
+  p += `You have exactly ${guessesRemaining} guess(es) remaining this turn.\n\n`
 
   if (guessesMade > 0) {
     p += 'You may say PASS to stop guessing if you are unsure.\n\n'
@@ -286,7 +286,7 @@ export default function GameShell() {
 
     await speakAndWait(`${word}, ${numberInput}`, 'narrator')
 
-    runGuessLoop(clue, numberInput + 1, 0, [], board, turnHistoryRef.current)
+    runGuessLoop(clue, numberInput, 0, [], board, turnHistoryRef.current)
   }, [clueInput, numberInput, board])
 
   // ── LLM GUESS LOOP ──
