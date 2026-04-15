@@ -166,6 +166,7 @@ export default function GameShell() {
   const [revealingIndex, setRevealingIndex] = useState(-1)
 
   const [showKey, setShowKey] = useState(true)
+  const [showHelp, setShowHelp] = useState(false)
   const [gameOverReason, setGameOverReason] = useState(null)
   const [clueError, setClueError] = useState('')
 
@@ -590,6 +591,7 @@ export default function GameShell() {
               </div>
               <div className="cn-submit-row">
                 <div className="cn-number-stepper">
+                  <span className="cn-stepper-label"># guesses</span>
                   <button
                     className="cn-stepper-btn"
                     onClick={() => setNumberInput(p => Math.min(maxClueNumber, p + 1))}
@@ -628,6 +630,11 @@ export default function GameShell() {
 
           <div className="cn-bottom-bar">
             <button
+              className="cn-help-btn"
+              onClick={() => setShowHelp(true)}
+              data-no-sfx
+            >?</button>
+            <button
               className={`cn-key-toggle ${showKey ? 'cn-key-active' : ''}`}
               onClick={() => setShowKey(p => !p)}
               data-no-sfx
@@ -648,6 +655,32 @@ export default function GameShell() {
               <span>Music</span>
             </label>
           </div>
+
+          {showHelp && (
+            <div className="cn-help-overlay" onClick={() => setShowHelp(false)}>
+              <div className="cn-help-modal" onClick={e => e.stopPropagation()}>
+                <h3 className="cn-help-title">How to Play</h3>
+                <ul className="cn-help-list">
+                  <li><span className="cn-help-swatch cn-swatch-blue" /> <strong>Blue</strong> words are safe. +1 point each.</li>
+                  <li><span className="cn-help-swatch cn-swatch-red" /> <strong>Red</strong> words are dangerous. −1 point each.</li>
+                  <li><span className="cn-help-swatch cn-swatch-neutral" /> <strong>Tan</strong> words are neutral. End the turn.</li>
+                  <li><span className="cn-help-swatch cn-swatch-black" /> <strong>Purple</strong> word is the assassin. Ends the game.</li>
+                </ul>
+                <p className="cn-help-text">
+                  Give a <strong>one-word clue</strong> and a <strong>number</strong> to
+                  tell your AI agent how many board words relate to it.
+                  The agent guesses that many words one at a time.
+                </p>
+                <p className="cn-help-text">
+                  Toggle <strong>Key</strong> to see which color each word is.
+                  Game ends when all blues, all reds, or the assassin is found.
+                </p>
+                <button className="app-btn app-btn-primary cn-help-close" onClick={() => setShowHelp(false)}>
+                  Got it
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
